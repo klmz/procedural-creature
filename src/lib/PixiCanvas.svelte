@@ -35,7 +35,7 @@
 	let legs: Leg[] = [];
 	
 	// Animation mode
-	let autoAnimate = $state(false);
+	let autoAnimate = $state(true); // Default to auto-animate
 	let animationSpeed = $state(2); // max acceleration
 	let currentTarget: { x: number; y: number } | null = null;
 	let showTarget = $state(true);
@@ -64,6 +64,9 @@
 	let handleMouseMove: (e: MouseEvent) => void;
 	let handleMouseUp: () => void;
 	let handleMouseLeave: () => void;
+	let handleTouchStart: (e: TouchEvent) => void;
+	let handleTouchMove: (e: TouchEvent) => void;
+	let handleTouchEnd: (e: TouchEvent) => void;
 	let tickerFn: () => void;
 
 	onMount(async () => {
@@ -123,10 +126,37 @@
 			isDragging = false;
 		};
 
+		// Touch interaction - only when not in auto mode
+		handleTouchStart = (e: TouchEvent) => {
+			if (!autoAnimate && e.touches.length > 0) {
+				isDragging = true;
+				e.preventDefault(); // Prevent scrolling
+				updateChainHeadFromTouch(e.touches[0]);
+			}
+		};
+
+		handleTouchMove = (e: TouchEvent) => {
+			if (isDragging && !autoAnimate && e.touches.length > 0) {
+				e.preventDefault(); // Prevent scrolling
+				updateChainHeadFromTouch(e.touches[0]);
+			}
+		};
+
+		handleTouchEnd = (e: TouchEvent) => {
+			isDragging = false;
+		};
+
+		// Add mouse listeners
 		app.canvas.addEventListener('mousedown', handleMouseDown);
 		app.canvas.addEventListener('mousemove', handleMouseMove);
 		app.canvas.addEventListener('mouseup', handleMouseUp);
 		app.canvas.addEventListener('mouseleave', handleMouseLeave);
+
+		// Add touch listeners
+		app.canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+		app.canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+		app.canvas.addEventListener('touchend', handleTouchEnd);
+		app.canvas.addEventListener('touchcancel', handleTouchEnd);
 
 		// Animation loop
 		tickerFn = () => {
@@ -152,10 +182,20 @@
 
 	onDestroy(() => {
 		if (app && app.canvas) {
+			// Remove mouse listeners
 			if (handleMouseDown) app.canvas.removeEventListener('mousedown', handleMouseDown);
 			if (handleMouseMove) app.canvas.removeEventListener('mousemove', handleMouseMove);
 			if (handleMouseUp) app.canvas.removeEventListener('mouseup', handleMouseUp);
 			if (handleMouseLeave) app.canvas.removeEventListener('mouseleave', handleMouseLeave);
+			
+			// Remove touch listeners
+			if (handleTouchStart) app.canvas.removeEventListener('touchstart', handleTouchStart);
+			if (handleTouchMove) app.canvas.removeEventListener('touchmove', handleTouchMove);
+			if (handleTouchEnd) {
+				app.canvas.removeEventListener('touchend', handleTouchEnd);
+				app.canvas.removeEventListener('touchcancel', handleTouchEnd);
+			}
+			
 			if (tickerFn) app.ticker.remove(tickerFn);
 			app.destroy(true, { children: true });
 		}
@@ -165,6 +205,13 @@
 		const rect = app.canvas.getBoundingClientRect();
 		const x = e.clientX - rect.left;
 		const y = e.clientY - rect.top;
+		chain.setHeadPosition(x, y);
+	}
+
+	function updateChainHeadFromTouch(touch: Touch) {
+		const rect = app.canvas.getBoundingClientRect();
+		const x = touch.clientX - rect.left;
+		const y = touch.clientY - rect.top;
 		chain.setHeadPosition(x, y);
 	}
 
@@ -1491,6 +1538,8 @@
 		position: absolute;
 		top: 0;
 		left: 0;
+		touch-action: none;
+		-webkit-touch-callout: none;
 	}
 
 	:global(canvas:active) {
